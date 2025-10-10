@@ -2,6 +2,22 @@
 
 **Purpose**: Define the GPT-2 model architecture parameters.
 
+## What is Model Configuration?
+
+Model configuration is the foundational step in building or loading a neural network. It defines the architecture's "blueprint" - specifying dimensions, layer counts, and other structural parameters that determine how the model processes information. Think of it as the architectural specification before construction begins.
+
+In this step, we're creating a configuration class that stores GPT-2's hyperparameters. These parameters aren't learned during training; rather, they define the model's structure: how many layers it has, how wide those layers are, how many attention heads to use, and so on.
+
+## Why Create This Configuration?
+
+**1. Compatibility with Pretrained Models**: By matching Hugging Face's GPT-2 configuration exactly, we ensure our implementation can load their pretrained weights. This is crucial - it means we can leverage a model trained on billions of tokens without needing to retrain from scratch.
+
+**2. Reproducibility**: Having configuration separate from implementation makes experiments reproducible. You can easily save, share, and recreate exact model architectures.
+
+**3. Code Organization**: Centralizing all hyperparameters in one place makes the codebase cleaner and easier to modify. Want to experiment with a different model size? Just change the config values.
+
+**4. Foundation for Implementation**: This configuration serves as the contract for all subsequent steps. Every component we build (embeddings, attention, MLP layers) will reference these parameters to ensure dimensional consistency.
+
 ### Key Concepts:
 **Dataclasses in Python**:
 - Python's [`@dataclass`](https://docs.python.org/3/library/dataclasses.html) decorator reduces boilerplate code when creating configuration objects and provides clean syntax for defining class attributes with type hints and default values

@@ -9,6 +9,8 @@ import inspect
 def test_gpt2_config():
     """Test that GPT2Config has the correct hyperparameter values."""
     config = config_module.GPT2Config()
+    print("Running tests for Step 01: Create Model Configuration...\n")
+    print("Results:")
 
     # Test if dataclass is imported from dataclasses
     if 'dataclasses' in config_module.__dict__.get('__annotations__', {}) or hasattr(config_module, 'dataclass'):
