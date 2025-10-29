@@ -1,15 +1,15 @@
-"""Tests for Step 05: Token Embeddings"""
+"""Tests for Step 06: Position Embeddings"""
 
 import ast
 import inspect
 from pathlib import Path
 
 
-def test_step_05():
-    """Comprehensive validation for Step 05 implementation."""
+def test_step_06():
+    """Comprehensive validation for Step 06 implementation."""
 
     results = []
-    step_file = Path("steps/step_05.py")
+    step_file = Path("steps/step_06.py")
 
     # Read source
     if not step_file.exists():
@@ -20,17 +20,28 @@ def test_step_05():
     tree = ast.parse(source)
 
     # Phase 1: Import checks
+    has_tensor = False
     has_embedding = False
     has_module = False
 
     for node in ast.walk(tree):
         if isinstance(node, ast.ImportFrom):
+            if node.module == "max.experimental.tensor":
+                for alias in node.names:
+                    if alias.name == "Tensor":
+                        has_tensor = True
             if node.module == "max.nn.module_v3":
                 for alias in node.names:
                     if alias.name == "Embedding":
                         has_embedding = True
                     if alias.name == "Module":
                         has_module = True
+
+    if has_tensor:
+        results.append("✅ Tensor is correctly imported from max.experimental.tensor")
+    else:
+        results.append("❌ Tensor is not imported from max.experimental.tensor")
+        results.append("   Hint: Add 'from max.experimental.tensor import Tensor'")
 
     if has_embedding:
         results.append("✅ Embedding is correctly imported from max.nn.module_v3")
@@ -46,37 +57,39 @@ def test_step_05():
 
     # Phase 2: Structure checks
     try:
-        from steps.step_05 import GPT2Embeddings
+        from steps.step_06 import GPT2PositionEmbeddings
 
-        results.append("✅ GPT2Embeddings class exists")
+        results.append("✅ GPT2PositionEmbeddings class exists")
     except ImportError:
-        results.append("❌ GPT2Embeddings class not found in step_05 module")
-        results.append("   Hint: Create class GPT2Embeddings(Module)")
+        results.append("❌ GPT2PositionEmbeddings class not found in step_06 module")
+        results.append("   Hint: Create class GPT2PositionEmbeddings(Module)")
         print("\n".join(results))
         return
 
     # Check inheritance
-    if issubclass(GPT2Embeddings, Module):
-        results.append("✅ GPT2Embeddings inherits from Module")
+    from max.nn.module_v3 import Module
+
+    if issubclass(GPT2PositionEmbeddings, Module):
+        results.append("✅ GPT2PositionEmbeddings inherits from Module")
     else:
-        results.append("❌ GPT2Embeddings must inherit from Module")
+        results.append("❌ GPT2PositionEmbeddings must inherit from Module")
 
     # Phase 3: Implementation checks
-    if "self.wte = Embedding" in source or (
-        "self.wte =" in source
-        and "None" not in source.split("self.wte =")[1].split("\n")[0]
+    if "self.wpe = Embedding" in source or (
+        "self.wpe =" in source
+        and "None" not in source.split("self.wpe =")[1].split("\n")[0]
     ):
-        results.append("✅ self.wte embedding layer is created correctly")
+        results.append("✅ self.wpe embedding layer is created correctly")
     else:
-        results.append("❌ self.wte embedding layer is not created correctly")
-        results.append("   Hint: Use Embedding(config.vocab_size, dim=config.n_embd)")
+        results.append("❌ self.wpe embedding layer is not created correctly")
+        results.append("   Hint: Use Embedding(config.n_positions, dim=config.n_embd)")
 
-    # Check if vocab_size is used
-    if "config.vocab_size" in source:
-        results.append("✅ config.vocab_size is used correctly")
+    # Check if n_positions is used
+    if "config.n_positions" in source:
+        results.append("✅ config.n_positions is used correctly")
     else:
-        results.append("❌ config.vocab_size not found")
-        results.append("   Hint: First parameter should be config.vocab_size")
+        results.append("❌ config.n_positions not found")
+        results.append("   Hint: First parameter should be config.n_positions")
 
     # Check if n_embd is used
     if "config.n_embd" in source:
@@ -86,11 +99,11 @@ def test_step_05():
         results.append("   Hint: Use dim=config.n_embd for the embedding dimension")
 
     # Check forward pass
-    if "self.wte(input_ids)" in source.replace(" ", ""):
-        results.append("✅ self.wte is called with input_ids in __call__ method")
+    if "self.wpe(position_ids)" in source.replace(" ", ""):
+        results.append("✅ self.wpe is called with position_ids in __call__ method")
     else:
-        results.append("❌ self.wte is not called with input_ids")
-        results.append("   Hint: Return self.wte(input_ids) in the __call__ method")
+        results.append("❌ self.wpe is not called with position_ids")
+        results.append("   Hint: Return self.wpe(position_ids) in the __call__ method")
 
     # Phase 4: Placeholder detection
     none_lines = [
@@ -119,27 +132,25 @@ def test_step_05():
         from solutions.solution_01 import GPT2Config
 
         config = GPT2Config()
-        embeddings = GPT2Embeddings(config)
-        results.append("✅ GPT2Embeddings class can be instantiated")
+        pos_embeddings = GPT2PositionEmbeddings(config)
+        results.append("✅ GPT2PositionEmbeddings class can be instantiated")
 
-        # Check wte attribute exists
-        if hasattr(embeddings, "wte"):
-            results.append("✅ GPT2Embeddings.wte is initialized")
+        # Check wpe attribute exists
+        if hasattr(pos_embeddings, "wpe"):
+            results.append("✅ GPT2PositionEmbeddings.wpe is initialized")
         else:
-            results.append("❌ GPT2Embeddings.wte attribute not found")
+            results.append("❌ GPT2PositionEmbeddings.wpe attribute not found")
 
-        # Test forward pass with sample token IDs
-        # Create a small batch of token IDs
-        batch_size, seq_length = 2, 4
-        test_input = Tensor.constant(
-            [[1, 2, 3, 4], [5, 6, 7, 8]], dtype=DType.int64, device=CPU()
-        )
+        # Test forward pass with position indices
+        # Create position indices for a sequence
+        seq_length = 8
+        test_positions = Tensor.arange(seq_length, dtype=DType.int64, device=CPU())
 
-        output = embeddings(test_input)
-        results.append("✅ GPT2Embeddings forward pass executes without errors")
+        output = pos_embeddings(test_positions)
+        results.append("✅ GPT2PositionEmbeddings forward pass executes without errors")
 
         # Check output shape
-        expected_shape = (batch_size, seq_length, config.n_embd)
+        expected_shape = (seq_length, config.n_embd)
         if output.shape == expected_shape:
             results.append(f"✅ Output shape is correct: {expected_shape}")
         else:
@@ -156,6 +167,15 @@ def test_step_05():
         else:
             results.append("❌ Output is all zeros - embeddings may not be initialized")
 
+        # Test that different positions give different embeddings
+        if seq_length > 1:
+            first_pos = output_np[0]
+            second_pos = output_np[1]
+            if not np.allclose(first_pos, second_pos):
+                results.append("✅ Different positions produce different embeddings")
+            else:
+                results.append("⚠️ Warning: Position 0 and 1 have identical embeddings")
+
     except Exception as e:
         results.append(f"❌ Functional test failed: {e}")
         import traceback
@@ -163,7 +183,7 @@ def test_step_05():
         results.append(f"   {traceback.format_exc().split('Error:')[-1].strip()}")
 
     # Print all results
-    print("Running tests for Step 05: Token Embeddings...\n")
+    print("Running tests for Step 06: Position Embeddings...\n")
     print("Results:")
     print("\n".join(results))
 
@@ -180,4 +200,4 @@ def test_step_05():
 
 
 if __name__ == "__main__":
-    test_step_05()
+    test_step_06()

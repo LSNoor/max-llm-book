@@ -1,288 +1,133 @@
-# Step 05: Implement Multi-Head Attention
+# Step 05: Token embeddings
 
-**Purpose**: Build the multi-head self-attention mechanism, the core component that enables GPT-2 to learn relationships between tokens in a sequence.
+<div class="note">
+    Learn to create token embeddings that convert discrete token IDs into continuous vector representations.
+</div>
 
-## What is Multi-Head Attention?
+## What are token embeddings?
 
-Multi-Head Attention is the fundamental mechanism that allows transformer models to process and relate different positions in a sequence. Introduced in the seminal paper ["Attention Is All You Need"](https://arxiv.org/abs/1706.03762), it computes attention scores between all pairs of tokens, allowing each token to "attend to" and aggregate information from other tokens in the sequence.
+In this section you will create the `Embedding` class. This converts discrete token IDs (integers) into continuous vector representations that the model can process.
 
-The "multi-head" aspect means the model performs multiple parallel attention operations (heads), each potentially learning to focus on different types of relationships or features in the data. These parallel attention heads are then concatenated and projected to produce the final output.
+The embedding layer is a lookup table with shape [50257, 768] where 50257 is GPT-2's vocabulary size and 768 is the embedding dimension. When you pass in token ID 1000, it returns row 1000 as the embedding vector.
 
-The attention mechanism works by:
+These learned embeddings capture semantic relationships—similar words end up with similar vectors during training.
 
-1. **Projecting** the input into three representations: Query (Q), Key (K), and Value (V)
-2. **Computing** attention scores between queries and keys
-3. **Splitting** into multiple heads to capture different relationship patterns
-4. **Applying** causal masking to prevent attending to future tokens (for autoregressive generation)
-5. **Merging** the heads back together and projecting to the output dimension
+## Why use token embeddings?
 
-Mathematically, for each head:
+**1. Continuous Representation**: Neural networks operate on continuous values, not discrete symbols. Token embeddings convert discrete token IDs (integers from 0 to vocab_size-1) into dense vectors that can be processed by matrix operations, allowing the model to learn meaningful transformations.
 
-$$\text{Attention}(Q, K, V) = \text{softmax}\left(\frac{QK^T}{\sqrt{d_k}}\right) V$$
+**2. Semantic Relationships**: During training, token embeddings naturally cluster semantically similar words closer together in vector space. Words like "king" and "queen" end up with similar embedding vectors, while unrelated words like "king" and "bicycle" are far apart. This learned structure is crucial for the model's understanding.
 
-where $d_k$ is the dimension of the key vectors (head_dim).
+**3. Dimensionality Control**: Raw one-hot encoded tokens would be 50,257-dimensional sparse vectors. Token embeddings compress this to a dense 768-dimensional representation, making computation tractable while preserving (and enhancing) the information needed for language understanding.
 
-## Why Use Multi-Head Attention?
+**4. Shared Representation**: The same embedding vectors are used regardless of a token's position in the sequence. This parameter sharing reduces model size and allows the model to generalize patterns learned from one context to other contexts.
 
-**1. Capturing Different Relationships**: Multiple attention heads allow the model to simultaneously attend to different types of information at different positions. One head might focus on syntactic relationships while another captures semantic similarities or positional patterns.
+### Key concepts
 
-**2. Parallel Information Processing**: Unlike sequential processing in RNNs, attention computes relationships between all token pairs in parallel, making it highly efficient on modern hardware and enabling long-range dependencies without the vanishing gradient problem.
+**Embedding Lookup Table**:
+- Stores one vector per vocabulary token
+- Shape: [vocab_size, embedding_dim]
+- Token ID `i` maps to row `i` of the table
+- Initialized randomly, then learned during training
 
-**3. Dynamic Context Aggregation**: Attention weights are computed dynamically based on the input, allowing the model to adaptively determine which tokens are relevant for processing each position. This is more flexible than fixed convolutional windows.
+**MAX Embedding API**:
+- [`Embedding(num_embeddings, dim)`](https://docs.modular.com/max/api/python/nn/module_v3#max.nn.module_v3.Embedding): Creates embedding lookup table
+- `num_embeddings`: Size of vocabulary (50257 for GPT-2)
+- `dim`: Embedding dimension (768 for GPT-2 base)
+- Automatically initializes weights with proper initialization scheme
 
-**4. Interpretability**: Attention weights can be visualized to understand what relationships the model has learned, providing insights into model behavior that are difficult to obtain from fully-connected or convolutional layers.
+**GPT-2 Vocabulary**:
+- 50,257 unique tokens (byte-pair encoding)
+- Includes common words, subwords, and special tokens
+- Same vocabulary used by HuggingFace's GPT-2 implementation
+- Token IDs range from 0 to 50256
 
-**5. Foundation of Modern NLP**: Multi-head attention is the core innovation that enables transformers to achieve state-of-the-art performance across language tasks. Every major language model (GPT, BERT, T5, etc.) uses this mechanism.
+**Embedding Dimension**:
+- GPT-2 base uses 768 dimensions
+- Larger models use 1024 (medium), 1280 (large), or 1600 (XL)
+- Must match throughout the architecture
+- Referred to as `n_embd` in the config
 
-### Key Concepts:
+**HuggingFace Naming Convention**:
+- `wte` stands for "word token embeddings"
+- Matches the naming in original GPT-2 code
+- Important for loading pretrained weights correctly
 
-**Query, Key, Value (Q, K, V)**:
+### Implementation tasks (`step_05.py`)
 
-- The input is projected into three different representations using a single linear layer (`c_attn`)
-- **Query**: "What am I looking for?" - used to compute attention scores
-- **Key**: "What do I have?" - matched against queries to compute attention
-- **Value**: "What information do I carry?" - weighted and aggregated based on attention scores
-- In self-attention, all three come from the same input sequence
+1. **Import Required Modules** (Lines 12-13):
+   - Import `Embedding` from `max.nn.module_v3`
+   - Import `Module` from `max.nn.module_v3`
+   - Config is already imported for you
 
-**Attention Score Computation**:
+2. **Create Token Embedding Layer** (Lines 24-26):
+   - Use `Embedding(config.vocab_size, dim=config.n_embd)`
+   - `config.vocab_size` is 50257 (GPT-2's vocabulary)
+   - `dim=config.n_embd` is 768 (embedding dimension)
+   - Store in `self.wte`
 
-- Scores computed by matrix multiplication: `Q @ K^T`
-- Higher scores indicate stronger relationships between tokens
-- Scaled by `1/d_k` to prevent extremely large values that make softmax saturate
-- Causal mask added to prevent attending to future positions
-- Softmax converts scores to probabilities that sum to 1
-
-**Multi-Head Mechanism**:
-
-- Embedding dimension (768) split into multiple heads (12 in GPT-2)
-- Each head has dimension `head_dim = embed_dim / num_heads = 64`
-- Heads process independently in parallel
-- After attention, heads are concatenated back to full embedding dimension
-- Final projection layer mixes information across heads
-
-**Causal Masking**:
-
-- Prevents tokens from attending to future positions
-- Essential for autoregressive generation (predicting next token)
-- Implemented by adding `-inf` to future positions before softmax
-- After softmax, `-inf` becomes 0 probability
-
-**Shape Transformations**:
-
-- Input: `[batch, seq_len, embed_dim]`
-- After Q/K/V projection: `[batch, seq_len, 3 * embed_dim]`
-- Split heads: `[batch, num_heads, seq_len, head_dim]`
-- After attention: `[batch, num_heads, seq_len, head_dim]`
-- Merge heads: `[batch, seq_len, embed_dim]`
-- Final output: `[batch, seq_len, embed_dim]`
-
-**MAX Operations**:
-
-- [`Linear(in_features, out_features, bias=True)`](https://docs.modular.com/max/api/python/nn/module_v3#max.nn.module_v3.Linear): Linear transformation layer
-- [`F.split(tensor, split_sizes, axis)`](https://docs.modular.com/max/api/python/experimental/functional#max.experimental.functional.split): Split tensor into multiple chunks
-- [`tensor.reshape(new_shape)`](https://docs.modular.com/max/api/python/experimental/tensor#max.experimental.tensor.Tensor.reshape): Reshape tensor to new dimensions
-- [`tensor.transpose(dim0, dim1)`](https://docs.modular.com/max/api/python/experimental/tensor#max.experimental.tensor.Tensor.transpose): Swap two dimensions
-- [`F.softmax(tensor)`](https://docs.modular.com/max/api/python/experimental/functional#max.experimental.functional.softmax): Apply softmax activation
-- [`math.sqrt(x)`](https://docs.python.org/3/library/math.html#math.sqrt): Compute square root for scaling
-
-**Layer Naming Convention**:
-
-- `c_attn`: Combined Q/K/V projection (3x embedding dimension output)
-- `c_proj`: Output projection after merging heads
-- Names match HuggingFace GPT-2 for weight loading compatibility
-
-### Implementation Tasks (`step_05.py`):
-
-1. **Import Required Modules** (Lines 1-10):
-   - `math` for `math.sqrt()` in attention scaling (already imported)
-   - `functional as F` from `max.experimental` - provides F.split(), F.softmax()
-   - `Tensor` from `max.experimental.tensor` - tensor operations
-   - `Linear` and `Module` from `max.nn.module_v3` - linear layers and base class
-
-2. **Create Attention Projection Layers** (Lines 24-33):
-   - Create `self.c_attn = Linear(self.embed_dim, 3 * self.embed_dim, bias=True)`
-   - This projects input to Q, K, V simultaneously (3x the dimension)
-   - Create `self.c_proj = Linear(self.embed_dim, self.embed_dim, bias=True)`
-   - This projects concatenated attention output back to embedding dimension
-
-3. **Implement _split_heads Method** (Lines 48-61):
-   - Calculate `new_shape = tensor.shape[:-1] + [num_heads, attn_head_size]`
-   - This adds head dimensions: `[batch, seq, embed] � [batch, seq, heads, head_dim]`
-   - Reshape tensor: `tensor = tensor.reshape(new_shape)`
-   - Transpose to move heads before sequence: `return tensor.transpose(-3, -2)`
-   - Final shape: `[batch, num_heads, seq_len, head_dim]`
-
-4. **Implement _merge_heads Method** (Lines 76-89):
-   - Transpose back: `tensor = tensor.transpose(-3, -2)`
-   - This reverses split_heads transpose: `[batch, heads, seq, head_dim] � [batch, seq, heads, head_dim]`
-   - Calculate `new_shape = tensor.shape[:-2] + [num_heads * attn_head_size]`
-   - Reshape to merge heads: `return tensor.reshape(new_shape)`
-   - Final shape: `[batch, seq_len, embed_dim]`
-
-5. **Implement _attn Method - Compute Attention Scores** (Lines 102-111):
-   - Compute attention: `attn_weights = query @ key.transpose(-1, -2)`
-   - This computes similarity between all query-key pairs
-   - Scale weights: `attn_weights = attn_weights / math.sqrt(int(value.shape[-1]))`
-   - Scaling prevents dot products from growing too large
-
-6. **Implement _attn Method - Apply Causal Mask** (Lines 113-125):
-   - Extract sequence length: `seq_len = query.shape[-2]`
-   - Create mask: `mask = causal_mask(seq_len, 0, dtype=query.dtype, device=query.device)`
-   - Add mask to weights: `attn_weights = attn_weights + mask`
-   - Mask contains `-inf` for future positions
-
-7. **Implement _attn Method - Compute Output** (Lines 127-137):
-   - Apply softmax: `attn_weights = F.softmax(attn_weights)`
-   - Converts scores to probabilities summing to 1
-   - Compute weighted sum: `attn_output = attn_weights @ value`
-   - Return `attn_output`
-
-8. **Implement __call__ Method - Project and Split** (Lines 149-167):
-   - Project to Q/K/V: `query, key, value = F.split(self.c_attn(hidden_states), [self.split_size, self.split_size, self.split_size], axis=2)`
-   - Split heads for query: `query = self._split_heads(query, self.num_heads, self.head_dim)`
-   - Split heads for key: `key = self._split_heads(key, self.num_heads, self.head_dim)`
-   - Split heads for value: `value = self._split_heads(value, self.num_heads, self.head_dim)`
-
-9. **Implement __call__ Method - Compute Attention and Project** (Lines 169-181):
-   - Compute attention: `attn_output = self._attn(query, key, value)`
-   - Merge heads: `attn_output = self._merge_heads(attn_output, self.num_heads, self.head_dim)`
-   - Final projection: `return self.c_proj(attn_output)`
+3. **Implement Forward Pass** (Lines 39-41):
+   - Call `self.wte(input_ids)` to lookup embeddings
+   - Input: token IDs of shape [batch_size, seq_length]
+   - Output: embeddings of shape [batch_size, seq_length, n_embd]
+   - Return the result directly
 
 **Implementation**:
 ```python
-# Import required modules
-import math
-from max.experimental import functional as F
-from max.experimental.tensor import Tensor
-from max.nn.module_v3 import Linear, Module
+from max.nn.module_v3 import Embedding, Module
 
 from solutions.solution_01 import GPT2Config
-from solutions.solution_02 import causal_mask
 
-class GPT2Attention(Module):
-    """Multi-head self-attention matching HuggingFace GPT-2 structure."""
+
+class GPT2Embeddings(Module):
+    """Token embeddings for GPT-2, matching HuggingFace structure."""
 
     def __init__(self, config: GPT2Config):
+        """Initialize token embedding layer.
+
+        Args:
+            config: GPT2Config containing vocab_size and n_embd
+        """
         super().__init__()
-        self.embed_dim = config.n_embd
-        self.num_heads = config.n_head
-        self.head_dim = self.embed_dim // self.num_heads
-        self.split_size = self.embed_dim
 
-        # Create projection layers
-        self.c_attn = Linear(self.embed_dim, 3 * self.embed_dim, bias=True)
-        self.c_proj = Linear(self.embed_dim, self.embed_dim, bias=True)
+        # Token embedding: lookup table from vocab_size to embedding dimension
+        # This converts discrete token IDs (0 to vocab_size-1) into dense vectors
+        self.wte = Embedding(config.vocab_size, dim=config.n_embd)
 
-    def _split_heads(
-        self, tensor: Tensor, num_heads: int, attn_head_size: int
-    ) -> Tensor:
-        """Split the last dimension into (num_heads, head_size)."""
-        new_shape = tensor.shape[:-1] + [num_heads, attn_head_size]
-        tensor = tensor.reshape(new_shape)
-        return tensor.transpose(-3, -2)
+    def __call__(self, input_ids):
+        """Convert token IDs to embeddings.
 
-    def _merge_heads(
-        self, tensor: Tensor, num_heads: int, attn_head_size: int
-    ) -> Tensor:
-        """Merge attention heads back."""
-        tensor = tensor.transpose(-3, -2)
-        new_shape = tensor.shape[:-2] + [num_heads * attn_head_size]
-        return tensor.reshape(new_shape)
+        Args:
+            input_ids: Tensor of token IDs, shape [batch_size, seq_length]
 
-    def _attn(self, query: Tensor, key: Tensor, value: Tensor) -> Tensor:
-        """Compute attention scores and apply to values."""
-        attn_weights = query @ key.transpose(-1, -2)
-
-        # Scale attention weights
-        attn_weights = attn_weights / math.sqrt(int(value.shape[-1]))
-
-        # Apply causal mask
-        seq_len = query.shape[-2]
-        mask = causal_mask(seq_len, 0, dtype=query.dtype, device=query.device)
-        attn_weights = attn_weights + mask
-
-        attn_weights = F.softmax(attn_weights)
-        attn_output = attn_weights @ value
-
-        return attn_output
-
-    def __call__(self, hidden_states: Tensor) -> Tensor:
-        """Apply multi-head self-attention."""
-        query, key, value = F.split(
-            self.c_attn(hidden_states),
-            [self.split_size, self.split_size, self.split_size],
-            axis=2,
-        )
-
-        query = self._split_heads(query, self.num_heads, self.head_dim)
-        key = self._split_heads(key, self.num_heads, self.head_dim)
-        value = self._split_heads(value, self.num_heads, self.head_dim)
-
-        attn_output = self._attn(query, key, value)
-        attn_output = self._merge_heads(
-            attn_output, self.num_heads, self.head_dim
-        )
-        attn_output = self.c_proj(attn_output)
-
-        return attn_output
+        Returns:
+            Token embeddings, shape [batch_size, seq_length, n_embd]
+        """
+        # Simple lookup: each token ID becomes its corresponding embedding vector
+        return self.wte(input_ids)
 ```
 
-### Validation:
+### Validation
 Run `pixi run s05`
 
 A failed test will show:
 ```bash
-Running tests for Step 05: Implement Multi-Head Attention...
+Running tests for Step 05: Token Embeddings...
 
 Results:
-❌ functional module is not imported from max.experimental
-   Hint: Add 'from max.experimental import functional as F'
-❌ Tensor is not imported from max.experimental.tensor
-   Hint: Add 'from max.experimental.tensor import Tensor'
-❌ Linear and Module are not imported from max.nn.module_v3
-   Hint: Add 'from max.nn.module_v3 import Linear, Module'
-❌ self.c_attn Linear layer is not created correctly
-   Hint: Use Linear(self.embed_dim, 3 * self.embed_dim, bias=True)
-❌ self.c_proj Linear layer is not created correctly
-   Hint: Use Linear(self.embed_dim, self.embed_dim, bias=True)
-❌ _split_heads: new_shape calculation is not correct
-   Hint: new_shape = tensor.shape[:-1] + [num_heads, attn_head_size]
-❌ _split_heads: tensor.reshape is not used
-   Hint: Use tensor.reshape(new_shape)
-❌ _split_heads: tensor.transpose(-3, -2) is not used
-   Hint: Use tensor.transpose(-3, -2) to move heads before sequence length
-❌ _merge_heads: new_shape calculation is not correct
-   Hint: new_shape = tensor.shape[:-2] + [num_heads * attn_head_size]
-❌ _attn: attention scores not computed correctly
-   Hint: Use query @ key.transpose(-1, -2)
-❌ _attn: attention weights are not scaled correctly
-   Hint: Scale by math.sqrt(int(value.shape[-1]))
-❌ _attn: sequence length not extracted correctly
-   Hint: seq_len = query.shape[-2]
-❌ _attn: causal_mask function is not called
-   Hint: Use causal_mask(seq_len, 0, dtype=query.dtype, device=query.device)
-❌ _attn: F.softmax is not applied to attention weights
-   Hint: Use F.softmax(attn_weights)
-❌ _attn: attention output not computed correctly
-   Hint: Use attn_weights @ value
-❌ __call__: F.split is not used correctly
-   Hint: Use F.split(self.c_attn(hidden_states), ...)
-❌ __call__: F.split does not use correct split sizes
-   Hint: Split into [self.split_size, self.split_size, self.split_size]
-❌ __call__: self._split_heads is not called for all query, key, and value
-   Hint: Call self._split_heads for query, key, and value
-❌ __call__: self._attn is not called
-   Hint: Call self._attn(query, key, value)
-❌ __call__: self._merge_heads is not called
-   Hint: Call self._merge_heads(attn_output, self.num_heads, self.head_dim)
-❌ __call__: self.c_proj is not called
-   Hint: Call self.c_proj(attn_output)
+❌ Embedding is not imported from max.nn.module_v3
+   Hint: Add 'from max.nn.module_v3 import Embedding, Module'
+❌ Module is not imported from max.nn.module_v3
+   Hint: Add 'from max.nn.module_v3 import Embedding, Module'
+❌ GPT2Embeddings class not found in step_05 module
+   Hint: Create class GPT2Embeddings(Module)
+❌ self.wte embedding layer is not created correctly
+   Hint: Use Embedding(config.vocab_size, dim=config.n_embd)
+❌ self.wte is not called with input_ids
+   Hint: Return self.wte(input_ids) in the __call__ method
 ❌ Found placeholder 'None' values that need to be replaced:
-   self.c_attn = None
-   self.c_proj = None
-   new_shape = None
-   tensor = None
-   ... and 8 more
+   self.wte = None
+   return None
    Hint: Replace all 'None' values with the actual implementation
 
 ============================================================
@@ -292,44 +137,31 @@ Results:
 
 A successful test will show:
 ```bash
-Running tests for Step 05: Implement Multi-Head Attention...
+Running tests for Step 05: Token Embeddings...
 
 Results:
-✅ functional module is correctly imported as F from max.experimental
-✅ Tensor is correctly imported from max.experimental.tensor
-✅ Linear and Module are imported from max.nn.module_v3
-✅ GPT2Attention class exists
-✅ self.c_attn Linear layer is created correctly
-✅ self.c_proj Linear layer is created correctly
-✅ _split_heads: new_shape calculation is correct
-✅ _split_heads: tensor.reshape is used
-✅ _split_heads: tensor.transpose(-3, -2) is used
-✅ _merge_heads: new_shape calculation is correct
-✅ _attn: attention scores computed with query @ key.transpose(-1, -2)
-✅ _attn: attention weights are scaled
-✅ _attn: sequence length extracted from query.shape[-2]
-✅ _attn: causal_mask function is called
-✅ _attn: F.softmax is applied to attention weights
-✅ _attn: attention output computed with attn_weights @ value
-✅ __call__: F.split is used on self.c_attn(hidden_states)
-✅ __call__: F.split uses correct split sizes
-✅ __call__: self._split_heads is called for query, key, and value
-✅ __call__: self._attn is called
-✅ __call__: self._merge_heads is called
-✅ __call__: self.c_proj is called
+✅ Embedding is correctly imported from max.nn.module_v3
+✅ Module is correctly imported from max.nn.module_v3
+✅ GPT2Embeddings class exists
+✅ GPT2Embeddings inherits from Module
+✅ self.wte embedding layer is created correctly
+✅ config.vocab_size is used correctly
+✅ config.n_embd is used correctly
+✅ self.wte is called with input_ids in __call__ method
 ✅ All placeholder 'None' values have been replaced
-✅ GPT2Attention class can be instantiated
-✅ GPT2Attention.c_attn is initialized
-✅ GPT2Attention.c_proj is initialized
-✅ GPT2Attention.embed_dim is correct: 768
-✅ GPT2Attention.num_heads is correct: 12
-✅ GPT2Attention.head_dim is correct: 64
-✅ GPT2Attention forward pass executes without errors
-✅ Output shape is correct: (1, 4, 768)
+✅ GPT2Embeddings class can be instantiated
+✅ GPT2Embeddings.wte is initialized
+✅ GPT2Embeddings forward pass executes without errors
+✅ Output shape is correct: (2, 4, 768)
+✅ Output contains non-zero embedding values
 
 ============================================================
-🎉 All checks passed! Your implementation matches the solution.
+🎉 All checks passed! Your implementation is complete.
 ============================================================
 ```
 
 **Reference**: `solutions/solution_05.py`
+
+---
+
+**Next**: In [Step 06](./step_06.md), you'll implement position embeddings to encode sequence order information, which will be combined with these token embeddings.
