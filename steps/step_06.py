@@ -15,6 +15,8 @@ Run: pixi run s06
 # TODO: Import required modules from MAX
 # Hint: You'll need Tensor from max.experimental.tensor
 # Hint: You'll need Embedding and Module from max.nn.module_v3
+from max.experimental.tensor import Tensor
+from max.nn.module_v3 import Embedding, Module
 
 from solutions.solution_01 import GPT2Config
 
@@ -28,7 +30,7 @@ class GPT2PositionEmbeddings(Module):
         # TODO: Create position embedding layer
         # Hint: Use Embedding(config.n_positions, dim=config.n_embd)
         # This creates a lookup table for position indices (0, 1, 2, ..., n_positions-1)
-        self.wpe = None
+        self.wpe =
 
     def __call__(self, position_ids):
         """Convert position indices to embeddings.
