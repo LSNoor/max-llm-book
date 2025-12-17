@@ -21,12 +21,43 @@ Run: pixi run s07
 # Hint: You'll need Tensor, Device, DType from max.experimental.tensor and max.driver
 # Hint: You'll need Dim, DimLike from max.graph
 # Hint: You'll also need Linear and Module from max.nn.module_v3
+import math
+from max.experimental import functional as F
+from max.experimental.tensor import Tensor, DType
+from max.driver import Device
+from max.graph import Dim, DimLike
+from max.nn.module_v3 import Linear, Module
+
 
 from solutions.solution_01 import GPT2Config
 
 
 # TODO: Copy causal_mask function from solution_02.py
 # This is the same function you implemented in Step 02
+
+@F.functional
+def causal_mask(
+    sequence_length: DimLike,
+    num_tokens: DimLike,
+    *,
+    dtype: DType,
+    device: Device,
+):
+    """Create a causal mask for autoregressive attention.
+
+    Args:
+        sequence_length: Length of the sequence.
+        num_tokens: Number of tokens.
+        dtype: Data type for the mask.
+        device: Device to create the mask on.
+
+    Returns:
+        A causal mask tensor.
+    """
+    n = Dim(sequence_length) + num_tokens
+    mask = Tensor.constant(float("-inf"), dtype=dtype, device=device)
+    mask = F.broadcast_to(mask, shape=(sequence_length, n))
+    return F.band_part(mask, num_lower=None, num_upper=0, exclude=True)
 
 
 class GPT2MultiHeadAttention(Module):
@@ -42,11 +73,11 @@ class GPT2MultiHeadAttention(Module):
 
         # TODO: Create combined Q/K/V projection
         # Hint: Use Linear(self.embed_dim, 3 * self.embed_dim, bias=True)
-        self.c_attn = None
+        self.c_attn = Linear(config.n_embd, 3* self.embed_dim, bias=True)
 
         # TODO: Create output projection
         # Hint: Use Linear(self.embed_dim, self.embed_dim, bias=True)
-        self.c_proj = None
+        self.c_proj = Linear(self.embed_dim, self.embed_dim, bias=True)
 
     def _split_heads(self, tensor, num_heads, attn_head_size):
         """Split the last dimension into (num_heads, head_size).
@@ -62,11 +93,12 @@ class GPT2MultiHeadAttention(Module):
         # TODO: Add head dimension
         # Hint: new_shape = tensor.shape[:-1] + [num_heads, attn_head_size]
         # Hint: tensor = tensor.reshape(new_shape)
-        pass
+        new_shape = tensor.shape[:-1] + [num_heads, attn_head_size]
+        tensor = tensor.reshape(new_shape)
 
         # TODO: Move heads dimension to position 1
         # Hint: return tensor.transpose(-3, -2)
-        return None
+        return tensor.transpose(-3, -2)
 
     def _merge_heads(self, tensor, num_heads, attn_head_size):
         """Merge attention heads back to original shape.
@@ -81,12 +113,12 @@ class GPT2MultiHeadAttention(Module):
         """
         # TODO: Move heads dimension back
         # Hint: tensor = tensor.transpose(-3, -2)
-        pass
+        tensor = tensor.transpose(-3, -2)
 
         # TODO: Flatten head dimensions
         # Hint: new_shape = tensor.shape[:-2] + [num_heads * attn_head_size]
         # Hint: return tensor.reshape(new_shape)
-        return None
+        return tensor.reshape(tensor.shape[:-2] + [num_heads * attn_head_size])
 
     def _attn(self, query, key, value):
         """Compute attention for all heads in parallel.
@@ -102,11 +134,20 @@ class GPT2MultiHeadAttention(Module):
         # TODO: Implement attention computation
         # The same 5-step process: scores, scale, mask, softmax, weighted sum
         # Hint: Compute attention scores: query @ key.transpose(-1, -2)
+        attn_weights = query @ value.transpose(-2,-1)
         # Hint: Scale by sqrt(head_dim): attn_weights / math.sqrt(head_dim)
+        attn_weights = attn_weights / math.sqrt(self.head_dim)
         # Hint: Apply causal mask using causal_mask function
+        seq_len = query.shape[-2]
+        mask = causal_mask(seq_len, 0, dtype=query.dtype, device=query.device)
+        attn_weights = attn_weights + mask
+
         # Hint: Apply softmax: F.softmax(attn_weights)
         # Hint: Weighted sum: attn_weights @ value
-        return None
+        attn_weights = F.softmax(attn_weights)
+        attn_output = attn_weights @ value
+
+        return attn_output
 
     def __call__(self, hidden_states):
         """Apply multi-head attention.

@@ -30,7 +30,7 @@ class GPT2PositionEmbeddings(Module):
         # TODO: Create position embedding layer
         # Hint: Use Embedding(config.n_positions, dim=config.n_embd)
         # This creates a lookup table for position indices (0, 1, 2, ..., n_positions-1)
-        self.wpe =
+        self.wpe = Embedding(config.n_positions, dim=config.n_embd)
 
     def __call__(self, position_ids):
         """Convert position indices to embeddings.
@@ -43,4 +43,4 @@ class GPT2PositionEmbeddings(Module):
         """
         # TODO: Return the position embeddings
         # Hint: Simply call self.wpe with position_ids
-        return None
+        return self.wpe(position_ids)
