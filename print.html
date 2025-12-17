@@ -375,7 +375,9 @@ to current projects and learning priorities.</p>
 </ul>
 <p>Once you have the values, replace each <code>None</code> in the <code>GPT2Config</code> class properties with the correct numbers from the configuration.</p>
 <p><strong>Implementation</strong> (<code>step_01.py</code>):</p>
-<pre><code class="language-python">"""
+<pre><code class="language-python">from dataclasses import dataclass
+
+"""
 Step 01: Model Configuration
 
 Implement the GPT-2 configuration dataclass that stores model hyperparameters.
@@ -392,7 +394,7 @@ Run: pixi run s01
 
 # 2. Add the Python @dataclass decorator to the GPT2Config class
 
-
+@dataclass
 class GPT2Config:
     """GPT-2 configuration matching HuggingFace.
 
@@ -409,13 +411,13 @@ class GPT2Config:
     # 3a. Run `pixi run huggingface` to access the model parameters from the Hugging Face `transformers` library
     # 3b. Alternately, read the values from GPT-2 model card: https://huggingface.co/openai-community/gpt2/blob/main/config.json
     # 4. Replace the None of the GPT2Config properties with the correct values
-    vocab_size: int = None
-    n_positions: int = None
-    n_embd: int = None
-    n_layer: int = None
-    n_head: int = None
-    n_inner: int = None  # Equal to 4 * n_embd
-    layer_norm_epsilon: float = None
+    vocab_size: int = 50257
+    n_positions: int = 1024
+    n_embd: int = 768
+    n_layer: int = 12
+    n_head: int = 12
+    n_inner: int = 3072  # Equal to 4 * n_embd
+    layer_norm_epsilon: float = 1e-5
 </code></pre>
 <h3 id="validation"><a class="header" href="#validation">Validation</a></h3>
 <p>Run <code>pixi run s01</code> to verify your implementation matches the expected configuration.</p>
@@ -539,16 +541,18 @@ from max.driver import Device
 from max.dtype import DType
 # TODO: Import necessary funcional module from max.experimental with the alias F
 # https://docs.modular.com/max/api/python/experimental/functional
+from max.experimental import functional as F
 
 # TODO: Import Tensor object from max.experimental.tensor
 # https://docs.modular.com/max/api/python/experimental/tensor.Tensor
+from max.experimental.tensor import Tensor
 
 from max.graph import Dim, DimLike
 
 # 2: Add the @F.functional decorator to make this a MAX functional operation
 # TODO: Add the decorator here
 
-
+@F.functional
 def causal_mask(
     sequence_length: DimLike,
     num_tokens: DimLike,
@@ -574,19 +578,22 @@ def causal_mask(
     # TODO: Use Tensor.constant() with float("-inf"), dtype, and device parameters
     # https://docs.modular.com/max/api/python/experimental/tensor#max.experimental.tensor.Tensor.constant
     # Hint: This creates the base mask value that will block attention to future tokens
-    mask = None
+    mask = Tensor.constant(float("-inf"), dtype=dtype, device=device)
 
     # 4: Broadcast the mask to the correct shape
     # TODO: Use F.broadcast_to() to expand mask to shape (sequence_length, n)
     # https://docs.modular.com/max/api/python/experimental/functional#max.experimental.functional.broadcast_to
     # Hint: This creates a 2D attention mask matrix
-    mask = None
+    mask = F.broadcast_to(mask, shape=(sequence_length, n))
 
     # 5: Apply band_part to create the causal (lower triangular) structure and return the mask
     # TODO: Use F.band_part() with num_lower=None, num_upper=0, exclude=True
     # https://docs.modular.com/max/api/python/experimental/functional/#max.experimental.functional.band_part
     # Hint: This keeps only the lower triangle, allowing attention to past tokens only
-    return None
+    mask = F.band_part(mask, num_lower=None, num_upper=0, exclude=True)
+
+
+    return mask
 </code></pre>
 <h3 id="validation-1"><a class="header" href="#validation-1">Validation</a></h3>
 <p>Run <code>pixi run s02</code> to verify your implementation.</p>
@@ -690,10 +697,11 @@ Run: pixi run s03
 # 1: Import the required modules from MAX
 # TODO: Import functional module from max.experimental with the alias F
 # https://docs.modular.com/max/api/python/experimental/functional
+from max.experimental import functional as F
 
 # TODO: Import Tensor from max.experimental.tensor
 # https://docs.modular.com/max/api/python/experimental/tensor.Tensor
-
+from max.experimental.tensor import Tensor
 from max.graph import DimLike
 from max.nn.module_v3 import Module
 
@@ -714,12 +722,12 @@ class LayerNorm(Module):
         # TODO: Create self.weight as a Tensor of ones with shape [dim]
         # https://docs.modular.com/max/api/python/experimental/tensor#max.experimental.tensor.Tensor.ones
         # Hint: This is the gamma parameter in layer normalization
-        self.weight = None
+        self.weight = Tensor.ones((dim,))
 
         # TODO: Create self.bias as a Tensor of zeros with shape [dim]
         # https://docs.modular.com/max/api/python/experimental/tensor#max.experimental.tensor.Tensor.zeros
         # Hint: This is the beta parameter in layer normalization
-        self.bias = None
+        self.bias = Tensor.zeros((dim,))
 
     def __call__(self, x: Tensor) -&gt; Tensor:
         """Apply layer normalization.
@@ -734,7 +742,11 @@ class LayerNorm(Module):
         # TODO: Use F.layer_norm() with x, gamma=self.weight, beta=self.bias, epsilon=self.eps
         # https://docs.modular.com/max/api/python/experimental/functional#max.experimental.functional.layer_norm
         # Hint: Layer normalization normalizes across the last dimension
-        return None
+        y = F.layer_norm(x, gamma=self.weight, beta=self.bias, eps=self.eps)
+
+
+
+        return y
 </code></pre>
 <h3 id="validation-2"><a class="header" href="#validation-2">Validation</a></h3>
 <p>Run <code>pixi run s03</code> to verify your implementation.</p>
@@ -867,13 +879,13 @@ Run: pixi run s04
 # 1: Import the required modules from MAX
 # TODO: Import functional module from max.experimental with the alias F
 # https://docs.modular.com/max/api/python/experimental/functional
-
+from max.experimental import functional as F
 # TODO: Import Tensor from max.experimental.tensor
 # https://docs.modular.com/max/api/python/experimental/tensor.Tensor
-
+from max.experimental.tensor import Tensor
 # TODO: Import Linear and Module from max.nn.module_v3
 # https://docs.modular.com/max/api/python/nn/module_v3
-
+from max.nn.module_v3 import Linear, Module
 from solutions.solution_01 import GPT2Config
 
 
@@ -893,13 +905,13 @@ class GPT2MLP(Module):
         # TODO: Create self.c_fc as a Linear layer from embed_dim to intermediate_size with bias=True
         # https://docs.modular.com/max/api/python/nn/module_v3#max.nn.module_v3.Linear
         # Hint: This is the expansion layer in the MLP
-        self.c_fc = None
+        self.c_fc = Linear(embed_dim, intermediate_size, bias=True)
 
         # 3: Create the second linear layer (intermediate back to embedding)
         # TODO: Create self.c_proj as a Linear layer from intermediate_size to embed_dim with bias=True
         # https://docs.modular.com/max/api/python/nn/module_v3#max.nn.module_v3.Linear
         # Hint: This is the projection layer that brings us back to the embedding dimension
-        self.c_proj = None
+        self.c_proj = Linear(intermediate_size, embed_dim, bias=True)
 
     def __call__(self, hidden_states: Tensor) -&gt; Tensor:
         """Apply feed-forward network.
@@ -913,18 +925,18 @@ class GPT2MLP(Module):
         # 4: Apply the first linear transformation
         # TODO: Apply self.c_fc to hidden_states
         # Hint: This expands the hidden dimension to the intermediate size
-        hidden_states = None
+        hidden_states = self.c_fc(hidden_states)
 
         # 5: Apply GELU activation function
         # TODO: Use F.gelu() with hidden_states and approximate="tanh"
         # https://docs.modular.com/max/api/python/experimental/functional#max.experimental.functional.gelu
         # Hint: GELU is the non-linear activation used in GPT-2's MLP
-        hidden_states = None
+        hidden_states = self.c_proj(hidden_states)
 
         # 6: Apply the second linear transformation and return
         # TODO: Apply self.c_proj to hidden_states and return the result
         # Hint: This projects back to the embedding dimension
-        return None
+        return hidden_states
 </code></pre>
 <h3 id="validation-3"><a class="header" href="#validation-3">Validation</a></h3>
 <p>Run <code>pixi run s04</code> to verify your implementation.</p>
@@ -1036,6 +1048,8 @@ Run: pixi run s05
 
 # TODO: Import required modules from MAX
 # Hint: You'll need Embedding and Module from max.nn.module_v3
+from max.nn.module_v3 import Embedding, Module
+
 
 from solutions.solution_01 import GPT2Config
 
@@ -1049,7 +1063,7 @@ class GPT2Embeddings(Module):
         # TODO: Create token embedding layer
         # Hint: Use Embedding(config.vocab_size, dim=config.n_embd)
         # This creates a lookup table that converts token IDs to embedding vectors
-        self.wte = None
+        self.wte = Embedding(config.vocab_size, dim=config.n_embd)
 
     def __call__(self, input_ids):
         """Convert token IDs to embeddings.
@@ -1062,7 +1076,7 @@ class GPT2Embeddings(Module):
         """
         # TODO: Return the embedded tokens
         # Hint: Simply call self.wte with input_ids
-        return None
+        return self.wte(input_ids)
 </code></pre>
 <h3 id="validation-4"><a class="header" href="#validation-4">Validation</a></h3>
 <p>Run <code>pixi run s05</code> to verify your implementation.</p>
@@ -1187,6 +1201,8 @@ Run: pixi run s06
 # TODO: Import required modules from MAX
 # Hint: You'll need Tensor from max.experimental.tensor
 # Hint: You'll need Embedding and Module from max.nn.module_v3
+from max.experimental.tensor import Tensor
+from max.nn.module_v3 import Embedding, Module
 
 from solutions.solution_01 import GPT2Config
 
@@ -1200,7 +1216,7 @@ class GPT2PositionEmbeddings(Module):
         # TODO: Create position embedding layer
         # Hint: Use Embedding(config.n_positions, dim=config.n_embd)
         # This creates a lookup table for position indices (0, 1, 2, ..., n_positions-1)
-        self.wpe = None
+        self.wpe = Embedding(config.n_positions, dim=config.n_embd)
 
     def __call__(self, position_ids):
         """Convert position indices to embeddings.
@@ -1213,7 +1229,7 @@ class GPT2PositionEmbeddings(Module):
         """
         # TODO: Return the position embeddings
         # Hint: Simply call self.wpe with position_ids
-        return None
+        return self.wpe(position_ids)
 </code></pre>
 <h3 id="validation-5"><a class="header" href="#validation-5">Validation</a></h3>
 <p>Run <code>pixi run s06</code> to verify your implementation.</p>
@@ -1387,12 +1403,43 @@ Run: pixi run s07
 # Hint: You'll need Tensor, Device, DType from max.experimental.tensor and max.driver
 # Hint: You'll need Dim, DimLike from max.graph
 # Hint: You'll also need Linear and Module from max.nn.module_v3
+import math
+from max.experimental import functional as F
+from max.experimental.tensor import Tensor, DType
+from max.driver import Device
+from max.graph import Dim, DimLike
+from max.nn.module_v3 import Linear, Module
+
 
 from solutions.solution_01 import GPT2Config
 
 
 # TODO: Copy causal_mask function from solution_02.py
 # This is the same function you implemented in Step 02
+
+@F.functional
+def causal_mask(
+    sequence_length: DimLike,
+    num_tokens: DimLike,
+    *,
+    dtype: DType,
+    device: Device,
+):
+    """Create a causal mask for autoregressive attention.
+
+    Args:
+        sequence_length: Length of the sequence.
+        num_tokens: Number of tokens.
+        dtype: Data type for the mask.
+        device: Device to create the mask on.
+
+    Returns:
+        A causal mask tensor.
+    """
+    n = Dim(sequence_length) + num_tokens
+    mask = Tensor.constant(float("-inf"), dtype=dtype, device=device)
+    mask = F.broadcast_to(mask, shape=(sequence_length, n))
+    return F.band_part(mask, num_lower=None, num_upper=0, exclude=True)
 
 
 class GPT2MultiHeadAttention(Module):
@@ -1408,11 +1455,11 @@ class GPT2MultiHeadAttention(Module):
 
         # TODO: Create combined Q/K/V projection
         # Hint: Use Linear(self.embed_dim, 3 * self.embed_dim, bias=True)
-        self.c_attn = None
+        self.c_attn = Linear(config.n_embd, 3* self.embed_dim, bias=True)
 
         # TODO: Create output projection
         # Hint: Use Linear(self.embed_dim, self.embed_dim, bias=True)
-        self.c_proj = None
+        self.c_proj = Linear(self.embed_dim, self.embed_dim, bias=True)
 
     def _split_heads(self, tensor, num_heads, attn_head_size):
         """Split the last dimension into (num_heads, head_size).
@@ -1428,11 +1475,12 @@ class GPT2MultiHeadAttention(Module):
         # TODO: Add head dimension
         # Hint: new_shape = tensor.shape[:-1] + [num_heads, attn_head_size]
         # Hint: tensor = tensor.reshape(new_shape)
-        pass
+        new_shape = tensor.shape[:-1] + [num_heads, attn_head_size]
+        tensor = tensor.reshape(new_shape)
 
         # TODO: Move heads dimension to position 1
         # Hint: return tensor.transpose(-3, -2)
-        return None
+        return tensor.transpose(-3, -2)
 
     def _merge_heads(self, tensor, num_heads, attn_head_size):
         """Merge attention heads back to original shape.
@@ -1447,12 +1495,12 @@ class GPT2MultiHeadAttention(Module):
         """
         # TODO: Move heads dimension back
         # Hint: tensor = tensor.transpose(-3, -2)
-        pass
+        tensor = tensor.transpose(-3, -2)
 
         # TODO: Flatten head dimensions
         # Hint: new_shape = tensor.shape[:-2] + [num_heads * attn_head_size]
         # Hint: return tensor.reshape(new_shape)
-        return None
+        return tensor.reshape(tensor.shape[:-2] + [num_heads * attn_head_size])
 
     def _attn(self, query, key, value):
         """Compute attention for all heads in parallel.
@@ -1468,11 +1516,20 @@ class GPT2MultiHeadAttention(Module):
         # TODO: Implement attention computation
         # The same 5-step process: scores, scale, mask, softmax, weighted sum
         # Hint: Compute attention scores: query @ key.transpose(-1, -2)
+        attn_weights = query @ value.transpose(-2,-1)
         # Hint: Scale by sqrt(head_dim): attn_weights / math.sqrt(head_dim)
+        attn_weights = attn_weights / math.sqrt(self.head_dim)
         # Hint: Apply causal mask using causal_mask function
+        seq_len = query.shape[-2]
+        mask = causal_mask(seq_len, 0, dtype=query.dtype, device=query.device)
+        attn_weights = attn_weights + mask
+
         # Hint: Apply softmax: F.softmax(attn_weights)
         # Hint: Weighted sum: attn_weights @ value
-        return None
+        attn_weights = F.softmax(attn_weights)
+        attn_output = attn_weights @ value
+
+        return attn_output
 
     def __call__(self, hidden_states):
         """Apply multi-head attention.
