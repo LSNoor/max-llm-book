@@ -134,7 +134,7 @@ class GPT2MultiHeadAttention(Module):
         # TODO: Implement attention computation
         # The same 5-step process: scores, scale, mask, softmax, weighted sum
         # Hint: Compute attention scores: query @ key.transpose(-1, -2)
-        attn_weights = query @ value.transpose(-2,-1)
+        attn_weights = query @ key.transpose(-1, -2)
         # Hint: Scale by sqrt(head_dim): attn_weights / math.sqrt(head_dim)
         attn_weights = attn_weights / math.sqrt(self.head_dim)
         # Hint: Apply causal mask using causal_mask function
@@ -161,23 +161,27 @@ class GPT2MultiHeadAttention(Module):
         # TODO: Project to Q, K, V
         # Hint: qkv = self.c_attn(hidden_states)
         # Hint: query, key, value = F.split(qkv, [self.split_size, self.split_size, self.split_size], axis=-1)
-        pass
+        qkv = self.c_attn(hidden_states)
+        query, key, value = F.split(qkv, [self.split_size, self.split_size, self.split_size], axis=-1)
 
         # TODO: Split into multiple heads
         # Hint: query = self._split_heads(query, self.num_heads, self.head_dim)
         # Hint: key = self._split_heads(key, self.num_heads, self.head_dim)
         # Hint: value = self._split_heads(value, self.num_heads, self.head_dim)
-        pass
+        query = self._split_heads(query, self.num_heads, self.head_dim)
+        key = self._split_heads(key, self.num_heads, self.head_dim)
+        value = self._split_heads(value, self.num_heads, self.head_dim)
 
         # TODO: Apply attention
         # Hint: attn_output = self._attn(query, key, value)
-        pass
+        attn_output = self._attn(query, key, value)
 
         # TODO: Merge heads back
         # Hint: attn_output = self._merge_heads(attn_output, self.num_heads, self.head_dim)
-        pass
+        attn_output = self._merge_heads(attn_output, self.num_heads, self.head_dim)
 
         # TODO: Output projection
         # Hint: attn_output = self.c_proj(attn_output)
         # Hint: return attn_output
-        return None
+        attn_output = self.c_proj(attn_output)
+        return attn_output
