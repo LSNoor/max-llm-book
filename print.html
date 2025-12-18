@@ -1516,7 +1516,7 @@ class GPT2MultiHeadAttention(Module):
         # TODO: Implement attention computation
         # The same 5-step process: scores, scale, mask, softmax, weighted sum
         # Hint: Compute attention scores: query @ key.transpose(-1, -2)
-        attn_weights = query @ value.transpose(-2,-1)
+        attn_weights = query @ key.transpose(-1, -2)
         # Hint: Scale by sqrt(head_dim): attn_weights / math.sqrt(head_dim)
         attn_weights = attn_weights / math.sqrt(self.head_dim)
         # Hint: Apply causal mask using causal_mask function
@@ -1543,26 +1543,30 @@ class GPT2MultiHeadAttention(Module):
         # TODO: Project to Q, K, V
         # Hint: qkv = self.c_attn(hidden_states)
         # Hint: query, key, value = F.split(qkv, [self.split_size, self.split_size, self.split_size], axis=-1)
-        pass
+        qkv = self.c_attn(hidden_states)
+        query, key, value = F.split(qkv, [self.split_size, self.split_size, self.split_size], axis=-1)
 
         # TODO: Split into multiple heads
         # Hint: query = self._split_heads(query, self.num_heads, self.head_dim)
         # Hint: key = self._split_heads(key, self.num_heads, self.head_dim)
         # Hint: value = self._split_heads(value, self.num_heads, self.head_dim)
-        pass
+        query = self._split_heads(query, self.num_heads, self.head_dim)
+        key = self._split_heads(key, self.num_heads, self.head_dim)
+        value = self._split_heads(value, self.num_heads, self.head_dim)
 
         # TODO: Apply attention
         # Hint: attn_output = self._attn(query, key, value)
-        pass
+        attn_output = self._attn(query, key, value)
 
         # TODO: Merge heads back
         # Hint: attn_output = self._merge_heads(attn_output, self.num_heads, self.head_dim)
-        pass
+        attn_output = self._merge_heads(attn_output, self.num_heads, self.head_dim)
 
         # TODO: Output projection
         # Hint: attn_output = self.c_proj(attn_output)
         # Hint: return attn_output
-        return None
+        attn_output = self.c_proj(attn_output)
+        return attn_output
 </code></pre>
 <h3 id="validation-6"><a class="header" href="#validation-6">Validation</a></h3>
 <p>Run <code>pixi run s07</code> to verify your implementation.</p>
@@ -1829,6 +1833,10 @@ Run: pixi run s08
 # Hint: You'll need Tensor from max.experimental.tensor
 # Hint: You'll need DimLike from max.graph
 # Hint: You'll need Module from max.nn.module_v3
+from max.experimental import functional as F
+from max.experimental.tensor import Tensor
+from max.graph import DimLike
+from max.nn.module_v3 import Module
 
 
 class LayerNorm(Module):
@@ -1846,11 +1854,11 @@ class LayerNorm(Module):
 
         # TODO: Create learnable scale parameter (weight)
         # Hint: Use Tensor.ones([dim])
-        self.weight = None
+        self.weight = Tensor.ones([dim])
 
         # TODO: Create learnable shift parameter (bias)
         # Hint: Use Tensor.zeros([dim])
-        self.bias = None
+        self.bias = Tensor.zeros([dim])
 
     def __call__(self, x: Tensor) -&gt; Tensor:
         """Apply layer normalization.
@@ -1863,7 +1871,7 @@ class LayerNorm(Module):
         """
         # TODO: Apply layer normalization
         # Hint: Use F.layer_norm(x, gamma=self.weight, beta=self.bias, epsilon=self.eps)
-        return None
+        return F.layer_norm(x, self.weight, self.bias, self.eps)
 
 
 class ResidualBlock(Module):
@@ -1880,7 +1888,7 @@ class ResidualBlock(Module):
 
         # TODO: Create layer normalization
         # Hint: Use LayerNorm(dim, eps=eps)
-        self.ln = None
+        self.ln = LayerNorm(dim, eps=eps)
 
     def __call__(self, x: Tensor, sublayer_output: Tensor) -&gt; Tensor:
         """Apply residual connection.
@@ -1894,7 +1902,7 @@ class ResidualBlock(Module):
         """
         # TODO: Add input and sublayer output (residual connection)
         # Hint: return x + sublayer_output
-        return None
+        return x + sublayer_output
 
 
 def apply_residual_connection(input_tensor: Tensor, sublayer_output: Tensor) -&gt; Tensor:
@@ -1909,7 +1917,7 @@ def apply_residual_connection(input_tensor: Tensor, sublayer_output: Tensor) -&g
     """
     # TODO: Add the two tensors
     # Hint: return input_tensor + sublayer_output
-    return None
+    return input_tensor + sublayer_output
 </code></pre>
 <h3 id="validation-7"><a class="header" href="#validation-7">Validation</a></h3>
 <p>Run <code>pixi run s08</code> to verify your implementation.</p>
@@ -2116,7 +2124,11 @@ Run: pixi run s09
 # Hint: Import GPT2MLP from solutions.solution_04
 # Hint: Import GPT2MultiHeadAttention from solutions.solution_07
 # Hint: Import LayerNorm from solutions.solution_08
-
+from max.nn.module_v3 import Module
+from solutions.solution_01 import GPT2Config
+from solutions.solution_04 import GPT2MLP
+from solutions.solution_07 import GPT2MultiHeadAttention
+from solutions.solution_08 import LayerNorm
 
 class GPT2Block(Module):
     """Complete GPT-2 transformer block."""
@@ -2138,19 +2150,19 @@ class GPT2Block(Module):
 
         # TODO: Create first layer norm (before attention)
         # Hint: Use LayerNorm(hidden_size, eps=config.layer_norm_epsilon)
-        self.ln_1 = None
+        self.ln_1 = LayerNorm(hidden_size, eps=config.layer_norm_epsilon)
 
         # TODO: Create multi-head attention
         # Hint: Use GPT2MultiHeadAttention(config)
-        self.attn = None
+        self.attn = GPT2MultiHeadAttention(config)
 
         # TODO: Create second layer norm (before MLP)
         # Hint: Use LayerNorm(hidden_size, eps=config.layer_norm_epsilon)
-        self.ln_2 = None
+        self.ln_2 = LayerNorm(hidden_size, eps=config.layer_norm_epsilon)
 
         # TODO: Create MLP
         # Hint: Use GPT2MLP(inner_dim, config)
-        self.mlp = None
+        self.mlp =GPT2MLP(inner_dim, config)
 
     def __call__(self, hidden_states):
         """Apply transformer block.
@@ -2166,17 +2178,23 @@ class GPT2Block(Module):
         # Hint: hidden_states = self.ln_1(hidden_states)
         # Hint: attn_output = self.attn(hidden_states)
         # Hint: hidden_states = attn_output + residual
-        pass
+        residual = hidden_states
+        hidden_states = self.ln_1(hidden_states)
+        attn_output = self.attn(hidden_states)
+        hidden_states = attn_output + residual
 
         # TODO: MLP block with residual connection
         # Hint: residual = hidden_states
         # Hint: hidden_states = self.ln_2(hidden_states)
         # Hint: feed_forward_hidden_states = self.mlp(hidden_states)
         # Hint: hidden_states = residual + feed_forward_hidden_states
-        pass
+        residual = hidden_states
+        hidden_states = self.ln_2(hidden_states)
+        feed_forward_hidden_states = self.mlp(hidden_states)
+        hidden_states = residual + feed_forward_hidden_states
 
         # TODO: Return the output
-        return None
+        return hidden_states
 </code></pre>
 <h3 id="validation-8"><a class="header" href="#validation-8">Validation</a></h3>
 <p>Run <code>pixi run s09</code> to verify your implementation.</p>
@@ -2335,7 +2353,11 @@ Run: pixi run s10
 # Hint: Import GPT2Config from solutions.solution_01
 # Hint: Import LayerNorm from solutions.solution_08
 # Hint: Import GPT2Block from solutions.solution_09
-
+from max.experimental.tensor import Tensor
+from max.nn.module_v3 import Embedding, Module, Sequential
+from solutions.solution_01 import GPT2Config
+from solutions.solution_08 import LayerNorm
+from solutions.solution_09 import GPT2Block
 
 class GPT2Model(Module):
     """Complete GPT-2 transformer model."""
@@ -2350,20 +2372,20 @@ class GPT2Model(Module):
 
         # TODO: Create token embeddings
         # Hint: Use Embedding(config.vocab_size, dim=config.n_embd)
-        self.wte = None
+        self.wte = Embedding(config.vocab_size, dim=config.n_embd)
 
         # TODO: Create position embeddings
         # Hint: Use Embedding(config.n_positions, dim=config.n_embd)
-        self.wpe = None
+        self.wpe = Embedding(config.n_positions, dim=config.n_embd)
 
         # TODO: Stack transformer blocks
         # Hint: Use Sequential(*(GPT2Block(config) for _ in range(config.n_layer)))
         # This creates config.n_layer blocks (12 for GPT-2 base)
-        self.h = None
+        self.h = Sequential(*(GPT2Block(config) for _ in range(config.n_layer)))
 
         # TODO: Create final layer normalization
         # Hint: Use LayerNorm(config.n_embd, eps=config.layer_norm_epsilon)
-        self.ln_f = None
+        self.ln_f = LayerNorm(config.n_embd, eps=config.layer_norm_epsilon)
 
     def __call__(self, input_ids):
         """Forward pass through the transformer.
@@ -2376,31 +2398,32 @@ class GPT2Model(Module):
         """
         # TODO: Get batch size and sequence length
         # Hint: batch_size, seq_length = input_ids.shape
-        pass
+        batch_size, seq_length = input_ids.shape
 
         # TODO: Get token embeddings
         # Hint: tok_embeds = self.wte(input_ids)
-        pass
+        tok_embeds = self.wte(input_ids)
 
         # TODO: Get position embeddings
         # Hint: Create position indices with Tensor.arange(seq_length, dtype=input_ids.dtype, device=input_ids.device)
         # Hint: pos_embeds = self.wpe(position_indices)
-        pass
+        position_indices= Tensor.arange(seq_length, dtype=input_ids.dtype, device=input_ids.device)
+        pos_embeds = self.wpe(position_indices)
 
         # TODO: Combine embeddings
         # Hint: x = tok_embeds + pos_embeds
-        pass
+        x = tok_embeds + pos_embeds
 
         # TODO: Apply transformer blocks
         # Hint: x = self.h(x)
-        pass
+        x = self.h(x)
 
         # TODO: Apply final layer norm
         # Hint: x = self.ln_f(x)
-        pass
+        x = self.ln_f(x)
 
         # TODO: Return the output
-        return None
+        return x
 </code></pre>
 <h3 id="validation-9"><a class="header" href="#validation-9">Validation</a></h3>
 <p>Run <code>pixi run s10</code> to verify your implementation.</p>
@@ -2570,7 +2593,9 @@ Run: pixi run s11
 # Hint: You'll need Linear and Module from max.nn.module_v3
 # Hint: Import GPT2Config from solutions.solution_01
 # Hint: Import GPT2Model from solutions.solution_10
-
+from max.nn.module_v3 import Linear, Module
+from solutions.solution_01 import GPT2Config
+from solutions.solution_10 import  GPT2Model
 
 class MaxGPT2LMHeadModel(Module):
     """Complete GPT-2 model with language modeling head."""
@@ -2587,12 +2612,12 @@ class MaxGPT2LMHeadModel(Module):
 
         # TODO: Create the transformer
         # Hint: Use GPT2Model(config)
-        self.transformer = None
+        self.transformer = GPT2Model(config)
 
         # TODO: Create language modeling head
         # Hint: Use Linear(config.n_embd, config.vocab_size, bias=False)
         # Projects from hidden dimension to vocabulary size
-        self.lm_head = None
+        self.lm_head = Linear(config.n_embd, config.vocab_size, bias=False)
 
     def __call__(self, input_ids):
         """Forward pass through transformer and LM head.
@@ -2605,14 +2630,14 @@ class MaxGPT2LMHeadModel(Module):
         """
         # TODO: Get hidden states from transformer
         # Hint: hidden_states = self.transformer(input_ids)
-        pass
+        hidden_states = self.transformer(input_ids)
 
         # TODO: Project to vocabulary logits
         # Hint: logits = self.lm_head(hidden_states)
-        pass
+        logits = self.lm_head(hidden_states)
 
         # TODO: Return logits
-        return None
+        return logits
 </code></pre>
 <h3 id="validation-10"><a class="header" href="#validation-10">Validation</a></h3>
 <p>Run <code>pixi run s11</code> to verify your implementation.</p>
@@ -2752,8 +2777,11 @@ Run: pixi run s12
 # Hint: You'll need DType from max.dtype
 # Hint: You'll need functional as F from max.experimental
 # Hint: You'll need Tensor from max.experimental.tensor
-
-
+import numpy as np
+from max.driver import CPU
+from max.dtype import DType
+from max.experimental import functional as F
+from max.experimental.tensor import Tensor
 def generate_next_token(model, input_ids, temperature=1.0, do_sample=True):
     """Generate the next token given input context.
 
@@ -2768,35 +2796,37 @@ def generate_next_token(model, input_ids, temperature=1.0, do_sample=True):
     """
     # TODO: Get logits from model
     # Hint: logits = model(input_ids)
-    pass
+    logits = model(input_ids)
 
     # TODO: Get logits for last position
     # Hint: next_token_logits = logits[0, -1, :]
-    pass
+    next_token_logits = logits[0, -1, :]
 
     # TODO: If sampling with temperature
     if do_sample and temperature &gt; 0:
         # TODO: Apply temperature scaling
         # Hint: temp_tensor = Tensor.constant(temperature, dtype=next_token_logits.dtype, device=next_token_logits.device)
         # Hint: next_token_logits = next_token_logits / temp_tensor
-        pass
+        temp_tensor = Tensor.constant(temperature, dtype=next_token_logits.dtype, device=next_token_logits.device)
 
         # TODO: Convert to probabilities
         # Hint: probs = F.softmax(next_token_logits)
-        pass
+        probs = F.softmax(next_token_logits)
 
         # TODO: Sample from distribution
         # Hint: probs_np = np.from_dlpack(probs.to(CPU()))
         # Hint: next_token_id = np.random.choice(len(probs_np), p=probs_np)
         # Hint: next_token_tensor = Tensor.constant(next_token_id, dtype=DType.int64, device=input_ids.device)
-        pass
+        probs_np = np.from_dlpack(probs.to(CPU()))
+        next_token_id = np.random.choice(len(probs_np), p=probs_np)
+        next_token_tensor = Tensor.constant(next_token_id, dtype=DType.int64, device=input_ids.device)
     else:
         # TODO: Greedy decoding (select most likely token)
         # Hint: next_token_tensor = F.argmax(next_token_logits)
-        pass
+        next_token_tensor = F.argmax(next_token_logits)
 
     # TODO: Return the next token
-    return None
+    return next_token_tensor
 
 
 def generate_tokens(
@@ -2816,26 +2846,26 @@ def generate_tokens(
     """
     # TODO: Initialize generated tokens with input
     # Hint: generated_tokens = input_ids
-    pass
+    generated_tokens = input_ids
 
     # TODO: Generation loop
     # Hint: for _ in range(max_new_tokens):
-    pass
+    for _ in range(max_new_tokens):
 
     # TODO: Generate next token
     # Hint: next_token = generate_next_token(model, generated_tokens, temperature=temperature, do_sample=do_sample)
-    pass
+        next_token = generate_next_token(model, generated_tokens, temperature=temperature, do_sample=do_sample)
 
     # TODO: Reshape to [1, 1] for concatenation
     # Hint: next_token_2d = next_token.reshape([1, -1])
-    pass
+        next_token_2d = next_token.reshape([1, -1])
 
     # TODO: Append to sequence
     # Hint: generated_tokens = F.concat([generated_tokens, next_token_2d], axis=1)
-    pass
+        generated_tokens = F.concat([generated_tokens, next_token_2d], axis=1)
 
     # TODO: Return generated sequence
-    return None
+    return generated_tokens
 </code></pre>
 <h3 id="validation-11"><a class="header" href="#validation-11">Validation</a></h3>
 <p>Run <code>pixi run s12</code> to verify your implementation.</p>
